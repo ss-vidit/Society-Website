@@ -2,16 +2,26 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const path = require('path');
 const { readAuthCookie } = require('./middleware/authCookie');
 
 // Load environment variables
 dotenv.config();
 
 const app = express();
-const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+const clientUrl = process.env.CLIENT_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:5173';
 const clientUrlObject = new URL(clientUrl);
 const clientOrigin = clientUrlObject.origin;
 const allowedClientOrigins = new Set([clientOrigin]);
+const frontendBuildPath = path.resolve(__dirname, '../frontend/dist');
+const serveFrontend = process.env.NODE_ENV === 'production' || process.env.SERVE_FRONTEND === 'true';
+
+if (process.env.NODE_ENV === 'production' && !process.env.CLIENT_URL && !process.env.RENDER_EXTERNAL_URL) {
+  throw new Error('Set CLIENT_URL or deploy on a host that provides RENDER_EXTERNAL_URL.');
+}
+
+// Render terminates TLS at its reverse proxy and forwards the original client IP.
+if (process.env.RENDER === 'true') app.set('trust proxy', 1);
 
 // Local development can be opened through either loopback hostname. Keep
 // production restricted to the configured client origin.
@@ -45,6 +55,10 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '256kb' }));
 app.use(express.urlencoded({ extended: true }));
 
+if (serveFrontend) {
+  app.use(express.static(frontendBuildPath, { index: false }));
+}
+
 // ─── Routes ───────────────────────────────────────────────────────
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
@@ -59,6 +73,15 @@ app.use('/api/notifications', require('./routes/notificationRoutes'));
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Binary Boppers API is running 🕺' });
 });
+
+if (serveFrontend) {
+  app.get('*', (req, res, next) => {
+    if (req.path === '/api' || req.path.startsWith('/api/')) return next();
+    res.sendFile(path.join(frontendBuildPath, 'index.html'), (error) => {
+      if (error) next(error);
+    });
+  });
+}
 
 // ─── Error handler ────────────────────────────────────────────────
 app.use((err, req, res, next) => {
