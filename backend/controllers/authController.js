@@ -1,6 +1,9 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const { AUTH_COOKIE_NAME, authCookieOptions } = require('../middleware/authCookie');
+
+const AUTH_COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
 
 // Generate JWT token
 const signToken = (id) => {
@@ -12,10 +15,13 @@ const signToken = (id) => {
 // Send token response
 const sendTokenResponse = (user, statusCode, res) => {
   const token = signToken(user._id);
+  res.cookie(AUTH_COOKIE_NAME, token, {
+    ...authCookieOptions(),
+    maxAge: AUTH_COOKIE_MAX_AGE
+  });
 
   res.status(statusCode).json({
     success: true,
-    token,
     user: {
       _id: user._id,
       name: user.name,
@@ -29,6 +35,11 @@ const sendTokenResponse = (user, statusCode, res) => {
       mustChangePassword: user.mustChangePassword || !user.profileSetupComplete
     }
   });
+};
+
+exports.logout = (_req, res) => {
+  res.clearCookie(AUTH_COOKIE_NAME, authCookieOptions());
+  res.status(200).json({ success: true, message: 'Signed out.' });
 };
 
 // Fetch & parse published Google Sheet CSV for Board Members
@@ -133,20 +144,21 @@ exports.getMe = async (req, res) => {
 // ─── POST /api/auth/create-member (board only) ───────────────────
 exports.createMember = async (req, res) => {
   try {
-    const { name, email, rollNumber, year, phone, instagram, societyRole, isBoardMember, boardRole, password } = req.body;
-
-    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    const { name, rollNumber, year, domain, phone, instagram, isBoardMember, boardRole, password } = req.body;
     const normalizedRollNumber = typeof rollNumber === 'string' ? rollNumber.trim() : '';
+    const normalizedEmail = `${normalizedRollNumber.toLowerCase()}@kiit.ac.in`;
     const numericYear = Number(year);
+    const validDomain = typeof domain === 'string' && User.SOCIETY_ROLES.includes(domain);
     if (
       typeof name !== 'string' || !name.trim() ||
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail) ||
-      !normalizedRollNumber ||
+      name.trim().length > 100 ||
+      !/^[A-Za-z0-9_-]{3,30}$/.test(normalizedRollNumber) ||
+      !validDomain ||
       !Number.isInteger(numericYear) || numericYear < 1 || numericYear > 4
     ) {
       return res.status(400).json({
         success: false,
-        message: 'Name, valid email, roll number, and year (1-4) are required.'
+        message: 'Name, valid roll number, domain, and year (1-4) are required.'
       });
     }
     if (isBoardMember !== undefined && typeof isBoardMember !== 'boolean') {
@@ -155,12 +167,6 @@ exports.createMember = async (req, res) => {
     if ((boardRole && !User.BOARD_ROLES.includes(boardRole)) ||
         (isBoardMember && !User.BOARD_ROLES.includes(boardRole))) {
       return res.status(400).json({ success: false, message: 'Select a valid board role.' });
-    }
-    if (societyRole !== undefined && (
-      !Array.isArray(societyRole) ||
-      societyRole.some((role) => !User.SOCIETY_ROLES.includes(role))
-    )) {
-      return res.status(400).json({ success: false, message: 'Select valid society roles.' });
     }
     if (password !== undefined && (typeof password !== 'string' || password.length < 6)) {
       return res.status(400).json({ success: false, message: 'Password must be at least 6 characters.' });
@@ -175,7 +181,7 @@ exports.createMember = async (req, res) => {
 
     const defaultPassword = isBoardMember
       ? process.env.BOARD_DEFAULT_PASSWORD || process.env.DEMO_ACCOUNT_PASSWORD
-      : process.env.DEMO_ACCOUNT_PASSWORD;
+      : 'binaryboppers';
     const temporaryPassword = password || defaultPassword || crypto.randomBytes(12).toString('base64url');
     if (temporaryPassword.length < 6) {
       return res.status(500).json({ success: false, message: 'Configured default password must be at least 6 characters.' });
@@ -183,7 +189,7 @@ exports.createMember = async (req, res) => {
     const newUser = await User.create({
       name: name.trim(), email: normalizedEmail, rollNumber: normalizedRollNumber,
       year: numericYear, phone, instagram,
-      societyRole: societyRole || [],
+      societyRole: [domain],
       isBoardMember: isBoardMember || false,
       boardRole: boardRole || null,
       password: temporaryPassword,

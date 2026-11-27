@@ -120,6 +120,9 @@ exports.markAttendance = async (req, res) => {
     if (!Array.isArray(records)) {
       return res.status(400).json({ success: false, message: 'Attendance records array is required.' });
     }
+    if (records.length === 0) {
+      return res.status(400).json({ success: false, message: 'Add attendance records before completing this GBM.' });
+    }
     if (records.some((record) =>
       !record ||
       typeof record.memberId !== 'string' ||

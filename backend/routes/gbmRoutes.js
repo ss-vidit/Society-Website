@@ -8,13 +8,13 @@ const {
   markAttendance,
   getMyAttendance
 } = require('../controllers/gbmController');
-const { protect, boardOnly } = require('../middleware/authMiddleware');
+const { protect, requireProfileSetup, boardOnly } = require('../middleware/authMiddleware');
 
-router.get('/public', protect, getPublicGbms);
-router.get('/', protect, getGbms);
-router.post('/', protect, boardOnly, scheduleGbm);
-router.get('/my-attendance', protect, getMyAttendance);
-router.get('/:id/attendance', protect, boardOnly, getGbmAttendance);
-router.post('/:id/attendance', protect, boardOnly, markAttendance);
+router.get('/public', protect, requireProfileSetup, getPublicGbms);
+router.get('/', protect, requireProfileSetup, getGbms);
+router.post('/', protect, requireProfileSetup, boardOnly, scheduleGbm);
+router.get('/my-attendance', protect, requireProfileSetup, getMyAttendance);
+router.get('/:id/attendance', protect, requireProfileSetup, boardOnly, getGbmAttendance);
+router.post('/:id/attendance', protect, requireProfileSetup, boardOnly, markAttendance);
 
 module.exports = router;

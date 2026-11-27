@@ -17,12 +17,12 @@ exports.getPublicBoardMembers = async (req, res) => {
 };
 
 // ─── GET /api/members (board only) ───────────────────────────────
-// Returns active board members with filters + their recent 5 completed GBM attendance
+// Returns active members with filters + their recent 5 completed GBM attendance
 exports.getAllMembers = async (req, res) => {
   try {
     const { societyRole, year, search } = req.query;
 
-    const filter = { isActive: true, isBoardMember: true };
+    const filter = { isActive: true };
     if (societyRole) filter.societyRole = societyRole;
     if (year) filter.year = Number(year);
     if (search) {

@@ -1,122 +1,108 @@
-import { useEffect, useMemo, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 
 export default function OpeningAnimation({ onComplete }) {
   const [visible, setVisible] = useState(true);
+  const reduceMotion = useReducedMotion();
+  const completed = useRef(false);
+  const completionTimer = useRef(null);
+  const onCompleteRef = useRef(onComplete);
 
-  // Generate floating binary particles (0s and 1s) matching the Binary Boppers logo
-  const particles = useMemo(() => {
-    return Array.from({ length: 34 }, (_, idx) => ({
-      id: idx,
-      digit: idx % 2 === 0 ? '1' : '0',
-      left: `${(idx * 29) % 96 + 2}%`,
-      top: `${(idx * 41) % 90 + 5}%`,
-      delay: (idx % 7) * 0.14,
-      size: idx % 3 === 0 ? 'text-2xl' : idx % 2 === 0 ? 'text-lg' : 'text-sm'
-    }));
-  }, []);
+  const particles = useMemo(() => Array.from({ length: 34 }, (_, index) => ({
+    id: index,
+    digit: index % 2 === 0 ? '1' : '0',
+    left: `${(index * 29) % 96 + 2}%`,
+    top: `${(index * 41) % 90 + 5}%`,
+    delay: (index % 7) * 0.14,
+    size: index % 3 === 0 ? 'text-2xl' : index % 2 === 0 ? 'text-lg' : 'text-sm'
+  })), []);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setVisible(false);
-      setTimeout(() => onComplete?.(), 500);
-    }, 3200);
-    return () => clearTimeout(timer);
+    onCompleteRef.current = onComplete;
   }, [onComplete]);
 
-  const handleSkip = () => {
+  const finish = () => {
+    if (completed.current) return;
+    completed.current = true;
     setVisible(false);
-    setTimeout(() => onComplete?.(), 300);
+    completionTimer.current = window.setTimeout(() => onCompleteRef.current?.(), 450);
   };
+
+  useEffect(() => {
+    const timer = window.setTimeout(finish, reduceMotion ? 1000 : 3200);
+    return () => {
+      window.clearTimeout(timer);
+      if (completionTimer.current) window.clearTimeout(completionTimer.current);
+    };
+  }, [reduceMotion]);
 
   return (
     <AnimatePresence>
       {visible && (
         <motion.div
           initial={{ opacity: 1 }}
-          exit={{ opacity: 0, scale: 1.04 }}
-          transition={{ duration: 0.55, ease: 'easeInOut' }}
+          exit={{ opacity: 0, scale: 1.02 }}
+          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
           className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden bg-black"
+          aria-label="Binary Boppers introduction"
         >
-          {/* Radial golden spotlight */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.5 }}
-            animate={{ opacity: 0.45, scale: 1.25 }}
-            transition={{ duration: 1.6, ease: 'easeOut' }}
-            className="pointer-events-none absolute h-[520px] w-[520px] rounded-full bg-gradient-to-tr from-amber-600/40 via-orange-500/20 to-yellow-400/30 blur-3xl"
-          />
-
-          {/* Floating binary 0s and 1s */}
-          <div className="pointer-events-none absolute inset-0 overflow-hidden">
-            {particles.map((p) => (
+          <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+            {!reduceMotion && particles.map((particle) => (
               <motion.span
-                key={p.id}
+                key={particle.id}
                 initial={{ opacity: 0, y: 24 }}
-                animate={{
-                  opacity: [0, 0.7, 0.25, 0],
-                  y: [24, -18, -42]
-                }}
-                transition={{
-                  duration: 2.6,
-                  delay: p.delay,
-                  ease: 'easeOut'
-                }}
-                style={{ left: p.left, top: p.top }}
-                className={`absolute font-mono font-bold text-amber-400/70 ${p.size}`}
+                animate={{ opacity: [0, 0.62, 0.24, 0], y: [24, -18, -42] }}
+                transition={{ duration: 2.6, delay: particle.delay, ease: [0.22, 1, 0.36, 1] }}
+                style={{ left: particle.left, top: particle.top }}
+                className={`absolute font-mono font-semibold text-amber-400/70 ${particle.size}`}
               >
-                {p.digit}
+                {particle.digit}
               </motion.span>
             ))}
           </div>
 
-          {/* Rotating golden ring + Logo reveal */}
           <div className="relative flex items-center justify-center">
-            <motion.div
-              initial={{ rotate: 0, scale: 0.6, opacity: 0 }}
-              animate={{ rotate: 360, scale: 1.08, opacity: 1 }}
-              transition={{ duration: 2.2, ease: 'easeOut' }}
-              className="absolute h-60 w-60 rounded-full border-2 border-dashed border-amber-400/60 shadow-[0_0_50px_rgba(245,158,11,0.35)] sm:h-72 sm:w-72"
-            />
-            <motion.div
-              initial={{ scale: 0.4, opacity: 0, rotate: -15 }}
-              animate={{ scale: 1, opacity: 1, rotate: 0 }}
-              transition={{ duration: 0.95, delay: 0.2, type: 'spring', stiffness: 120 }}
-              className="relative z-10 h-48 w-48 overflow-hidden rounded-full border-4 border-amber-500/80 shadow-[0_0_60px_rgba(245,158,11,0.45)] sm:h-56 sm:w-56"
-            >
-              <img
-                src="/logo.jpg"
-                alt="Binary Boppers Logo"
-                className="h-full w-full object-cover"
+            {!reduceMotion && (
+              <motion.div
+                initial={{ rotate: 0, scale: 0.72, opacity: 0 }}
+                animate={{ rotate: 360, scale: 1, opacity: 1 }}
+                transition={{ duration: 2.2, ease: [0.22, 1, 0.36, 1] }}
+                className="absolute h-52 w-52 rounded-full border border-dashed border-amber-400/65 sm:h-60 sm:w-60"
+                aria-hidden="true"
               />
+            )}
+            <motion.div
+              initial={reduceMotion ? { opacity: 0 } : { scale: 0.72, opacity: 0, rotate: -8 }}
+              animate={reduceMotion ? { opacity: 1 } : { scale: 1, opacity: 1, rotate: 0 }}
+              transition={{ duration: 0.8, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
+              className="relative z-10 h-40 w-40 overflow-hidden rounded-full border-2 border-amber-400/80 sm:h-48 sm:w-48"
+            >
+              <img src="/logo.jpg" alt="Binary Boppers" className="h-full w-full object-cover" />
             </motion.div>
           </div>
 
-          {/* Title & Tagline */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.9 }}
+            transition={{ duration: 0.55, delay: 0.65, ease: [0.22, 1, 0.36, 1] }}
             className="relative z-10 mt-8 text-center"
           >
-            <h1 className="font-display bg-gradient-to-r from-amber-200 via-yellow-400 to-orange-500 bg-clip-text text-3xl font-extrabold tracking-[0.25em] text-transparent sm:text-5xl">
+            <h1 className="font-display text-2xl font-semibold tracking-[0.02em] text-white sm:text-3xl">
               BINARY BOPPERS
             </h1>
-            <motion.p
-              initial={{ opacity: 0, letterSpacing: '0.1em' }}
-              animate={{ opacity: 1, letterSpacing: '0.35em' }}
-              transition={{ duration: 0.8, delay: 1.35 }}
-              className="mt-2 text-xs font-medium uppercase text-amber-300/80 sm:text-sm"
-            >
-              Rhythm • Code • Motion
-            </motion.p>
+            <p className="mt-2 flex justify-center gap-2 text-xs font-medium text-zinc-300 sm:text-sm">
+              <span>CODE.</span>
+              <span className="text-amber-400">DANCE.</span>
+              <span>CREATE.</span>
+            </p>
           </motion.div>
 
-          {/* Skip button */}
           <button
-            onClick={handleSkip}
-            className="absolute bottom-8 right-8 rounded-full border border-amber-500/40 bg-black/60 px-4 py-1.5 text-xs font-medium text-amber-300 backdrop-blur transition hover:border-amber-400 hover:bg-amber-500/10"
+            type="button"
+            onClick={finish}
+            className="absolute bottom-6 right-6 rounded-md border border-white/20 px-3 py-2 text-xs font-medium text-zinc-300 transition-colors hover:border-amber-400/60 hover:text-white"
           >
-            Skip Intro →
+            Skip intro
           </button>
         </motion.div>
       )}

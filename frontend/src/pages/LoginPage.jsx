@@ -43,7 +43,7 @@ export default function LoginPage({ onPlayIntro }) {
   };
 
   return (
-    <div className="app-shell relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-4 pb-12 pt-24">
+    <div id="main-content" className="app-shell relative flex min-h-screen flex-col items-center justify-center px-4 pb-12 pt-24">
       <Navbar />
 
       <div className="relative z-10 w-full max-w-md">
@@ -55,19 +55,19 @@ export default function LoginPage({ onPlayIntro }) {
           Back to Binary Boppers
         </Link>
 
-        <div className="app-panel border-t-2 border-t-amber-400 p-6 sm:p-8">
+        <div className="app-panel p-6 sm:p-8">
           <div className="mb-6 flex flex-col items-center text-center">
             <img
               src="/logo.jpg"
               alt="Binary Boppers"
-              className="h-16 w-16 rounded-full border-2 border-amber-400/80 object-cover shadow-[0_0_25px_rgba(245,158,11,0.35)]"
+              className="h-16 w-16 rounded-full border border-amber-400/70 object-cover"
             />
-            <span className="mt-4 inline-flex items-center gap-1.5 border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-amber-300">
+            <span className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-300">
               {isBoardHint ? <Shield className="h-3 w-3" /> : <UserCheck className="h-3 w-3" />}
               {isBoardHint ? 'Board Member Login' : 'Society Member Login'}
             </span>
             <h1 className="app-page-title mt-4 text-3xl">
-              Member portal
+              {isBoardHint ? 'Board sign in' : 'Member sign in'}
             </h1>
             <p className="mt-2 max-w-xs text-sm leading-6 text-zinc-400">
               {isBoardHint
@@ -84,12 +84,14 @@ export default function LoginPage({ onPlayIntro }) {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-zinc-200">Email</label>
+              <label htmlFor="login-email" className="mb-1.5 block text-sm font-medium text-zinc-200">Email</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
                 <input
+                  id="login-email"
                   type="email"
                   required
+                  autoComplete="username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@kiit.ac.in"
@@ -99,12 +101,14 @@ export default function LoginPage({ onPlayIntro }) {
             </div>
 
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-zinc-200">Password</label>
+              <label htmlFor="login-password" className="mb-1.5 block text-sm font-medium text-zinc-200">Password</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
                 <input
+                  id="login-password"
                   type="password"
                   required
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
@@ -116,7 +120,7 @@ export default function LoginPage({ onPlayIntro }) {
             <button
               type="submit"
               disabled={submitting}
-              className="app-button-primary w-full py-3 text-xs font-bold uppercase tracking-[0.12em] disabled:cursor-not-allowed disabled:opacity-50"
+              className="app-button-primary w-full px-4 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
             >
               {submitting ? 'Signing in...' : 'Sign In & Enter'}
             </button>

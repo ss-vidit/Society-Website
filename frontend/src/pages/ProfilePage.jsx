@@ -88,7 +88,7 @@ export default function ProfilePage({ setup = false }) {
   };
 
   return (
-    <div className="app-shell workspace-ui min-h-screen pb-28 pt-[72px] text-white">
+    <div id="main-content" className="app-shell workspace-ui min-h-screen pb-28 pt-24 text-white">
       <Navbar />
       {!setup && <BottomDock />}
       <main className="app-container max-w-3xl py-10 sm:px-6">
@@ -158,7 +158,7 @@ export default function ProfilePage({ setup = false }) {
               <Upload className="mr-1 inline h-3.5 w-3.5" /> Profile photo
               <input
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp"
                 onChange={(event) => setPhoto(event.target.files?.[0] || null)}
                 className="mt-1.5 block w-full text-xs text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-amber-500/20 file:px-3 file:py-2 file:font-semibold file:text-amber-300"
               />

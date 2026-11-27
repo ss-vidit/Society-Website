@@ -69,16 +69,16 @@ export default function BoardDashboard() {
 
   // Members state
   const [members, setMembers] = useState([]);
+  const [membersLoading, setMembersLoading] = useState(true);
+  const [membersError, setMembersError] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [yearFilter, setYearFilter] = useState('');
   const [search, setSearch] = useState('');
   const [newMember, setNewMember] = useState({
     name: '',
-    email: '',
     rollNumber: '',
-    year: 1,
-    phone: '',
-    societyRole: []
+    year: '',
+    domain: ''
   });
 
   // GBM state
@@ -106,12 +106,14 @@ export default function BoardDashboard() {
 
   const [toast, setToast] = useState('');
 
-  const notify = (msg) => {
+  const notify = (msg, duration = 4500) => {
     setToast(msg);
-    setTimeout(() => setToast(''), 3500);
+    setTimeout(() => setToast(''), duration);
   };
 
   const loadMembers = async () => {
+    setMembersLoading(true);
+    setMembersError('');
     const params = {};
     if (roleFilter) params.societyRole = roleFilter;
     if (yearFilter) params.year = yearFilter;
@@ -120,7 +122,11 @@ export default function BoardDashboard() {
       const { data } = await api.get('/members', { params });
       setMembers(data.members || []);
     } catch (error) {
-      notify(error.response?.data?.message || 'Could not load the board roster.');
+      setMembersError(error.response?.status === 401
+        ? 'Your session has expired. Log in again to load the member roster.'
+        : error.response?.data?.message || 'Could not load the board roster. Try again in a moment.');
+    } finally {
+      setMembersLoading(false);
     }
   };
 
@@ -167,15 +173,18 @@ export default function BoardDashboard() {
     setTab(validTabs.includes(requestedTab) ? requestedTab : 'members');
   }, [searchParams]);
 
+  const activeGbmCount = gbms.filter((gbm) => gbm.status !== 'completed').length;
+  const publishedEventCount = events.filter((event) => !event.isArchived).length;
+
   // ── Create Member ──
   const handleCreateMember = async (e) => {
     e.preventDefault();
     try {
       const { data } = await api.post('/auth/create-member', newMember);
       notify(data.temporaryPassword
-        ? `Member created. Temporary password: ${data.temporaryPassword}`
+        ? `Member created. Email: ${data.user.email}. Temporary password: ${data.temporaryPassword}`
         : 'Member account created!');
-      setNewMember({ name: '', email: '', rollNumber: '', year: 1, phone: '', societyRole: [] });
+      setNewMember({ name: '', rollNumber: '', year: '', domain: '' });
       loadMembers();
     } catch (err) {
       notify(err.response?.data?.message || 'Could not create member.');
@@ -287,26 +296,49 @@ export default function BoardDashboard() {
   };
 
   return (
-    <div className="app-shell workspace-ui min-h-screen pb-28 pt-[72px] text-white">
+    <div id="main-content" className="app-shell workspace-ui min-h-screen pb-28 pt-24 text-white">
       <Navbar />
       <BottomDock recruitment={recruitment} />
 
       <div className="app-container max-w-7xl py-8 sm:px-6">
-        {/* Header */}
-        <div className="mb-6 flex flex-col justify-between gap-4 border-b border-zinc-800 pb-6 sm:flex-row sm:items-center">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-300">
-              <Shield className="h-3.5 w-3.5" />
-              {BOARD_ROLE_LABELS[user?.boardRole] || 'Board Member'}
+        <section className="portal-intro board-intro mb-6">
+          <div className="portal-intro-main">
+            <img
+              src={user?.photo || '/logo.jpg'}
+              alt={user?.name || 'Board member'}
+              className="portal-avatar h-16 w-16 rounded-full object-cover"
+            />
+            <div className="min-w-0">
+              <p className="app-kicker flex items-center gap-2">
+                <Shield className="h-3.5 w-3.5" />
+                {BOARD_ROLE_LABELS[user?.boardRole] || 'Board Member'}
+              </p>
+              <h1 className="portal-title mt-2">Board workspace</h1>
+              <p className="mt-2 max-w-xl text-sm text-zinc-400">
+                Manage your members, meetings, events, and recruitment.
+              </p>
             </div>
-            <h1 className="app-page-title mt-3">
-              Board Command Center
-            </h1>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <dl className="portal-metrics portal-metrics-three">
+            <div className="portal-metric">
+              <dt>Members</dt>
+              <dd className="portal-metric-value">{membersLoading ? '…' : membersError ? '—' : members.length}</dd>
+            </div>
+            <div className="portal-metric">
+              <dt>Active GBMs</dt>
+              <dd className="portal-metric-value">{activeGbmCount}</dd>
+            </div>
+            <div className="portal-metric">
+              <dt>Published events</dt>
+              <dd className="portal-metric-value">{publishedEventCount}</dd>
+            </div>
+          </dl>
+        </section>
+
+        <nav aria-label="Board workspace sections" className="portal-tabs mb-8">
             {[
-              { id: 'members', label: 'Board Roster', icon: Users },
+              { id: 'members', label: 'Member Roster', icon: Users },
               { id: 'gbm', label: 'Schedule GBM', icon: CalendarCheck },
               { id: 'attendance', label: 'Attendance', icon: Check },
               { id: 'events', label: 'Add Event', icon: Sparkles },
@@ -320,6 +352,8 @@ export default function BoardDashboard() {
               return (
                 <button
                   key={item.id}
+                  type="button"
+                  aria-pressed={tab === item.id}
                   onClick={() => setSearchParams({ tab: item.id })}
                   className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition ${
                     tab === item.id
@@ -332,8 +366,7 @@ export default function BoardDashboard() {
                 </button>
               );
             })}
-          </div>
-        </div>
+        </nav>
 
         {toast && (
           <div className="mb-6 rounded-xl border border-amber-500/40 bg-amber-500/15 px-4 py-3 text-sm text-amber-200">
@@ -384,6 +417,22 @@ export default function BoardDashboard() {
               </select>
             </div>
 
+            {membersError ? (
+              <div role="alert" className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-6 text-sm text-amber-100">
+                <span>{membersError}</span>
+                <button type="button" onClick={loadMembers} className="rounded-lg border border-amber-500/40 px-3 py-2 font-semibold text-amber-200 hover:bg-amber-500/10">
+                  Retry
+                </button>
+              </div>
+            ) : membersLoading ? (
+              <p className="rounded-2xl border border-zinc-800 bg-zinc-950 p-6 text-center text-sm text-zinc-400" aria-live="polite">
+                Loading member roster…
+              </p>
+            ) : members.length === 0 ? (
+              <p className="rounded-2xl border border-zinc-800 bg-zinc-950 p-6 text-center text-sm text-zinc-400">
+                No member profiles match these filters.
+              </p>
+            ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {members.map((m) => (
                 <div
@@ -398,7 +447,8 @@ export default function BoardDashboard() {
                     />
                     <div className="min-w-0 flex-1">
                       <h3 className="truncate font-bold text-white">{m.name}</h3>
-                      <p className="text-xs text-zinc-400">Year {m.year}</p>
+                      <p className="text-xs text-zinc-400">Year {m.year} · {m.rollNumber}</p>
+                      <p className="mt-1 truncate text-xs text-zinc-500">{m.email}</p>
                       <div className="mt-1 flex flex-wrap gap-1">
                         {(m.societyRole || []).length ? m.societyRole.map((role) => (
                           <span key={role} className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200">
@@ -434,11 +484,6 @@ export default function BoardDashboard() {
                         {r.replace('_', ' ')}
                       </span>
                     ))}
-                    {members.length === 0 && (
-                      <p className="col-span-full rounded-2xl border border-zinc-800 bg-zinc-950 p-6 text-center text-sm text-zinc-400">
-                        No member profiles match these filters.
-                      </p>
-                    )}
                   </div>
 
                   <div className="mt-4 flex items-center justify-between border-t border-zinc-800/80 pt-3 text-xs">
@@ -450,6 +495,7 @@ export default function BoardDashboard() {
                 </div>
               ))}
             </div>
+            )}
 
             {/* Quick Add Member */}
             <form
@@ -457,44 +503,63 @@ export default function BoardDashboard() {
               className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5"
             >
               <h2 className="font-display mb-4 text-lg font-bold text-amber-300">
-                Add New Member
+                Add a member
               </h2>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <input
                   required
                   placeholder="Name"
+                  maxLength={100}
                   value={newMember.name}
                   onChange={(e) => setNewMember({ ...newMember, name: e.target.value })}
                   className="rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs outline-none focus:border-amber-500"
                 />
                 <input
                   required
-                  type="email"
-                  placeholder="Email"
-                  value={newMember.email}
-                  onChange={(e) => setNewMember({ ...newMember, email: e.target.value })}
-                  className="rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs outline-none focus:border-amber-500"
-                />
-                <input
-                  required
                   placeholder="Roll Number"
+                  minLength={3}
+                  maxLength={30}
+                  pattern="[A-Za-z0-9_-]{3,30}"
+                  title="Use 3 to 30 letters, numbers, underscores, or hyphens."
                   value={newMember.rollNumber}
-                  onChange={(e) => setNewMember({ ...newMember, rollNumber: e.target.value })}
+                  onChange={(e) => setNewMember({ ...newMember, rollNumber: e.target.value.trim() })}
                   className="rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs outline-none focus:border-amber-500"
                 />
-                <input
-                  placeholder="Phone"
-                  value={newMember.phone}
-                  onChange={(e) => setNewMember({ ...newMember, phone: e.target.value })}
+                <select
+                  required
+                  value={newMember.domain}
+                  onChange={(e) => setNewMember({ ...newMember, domain: e.target.value })}
                   className="rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs outline-none focus:border-amber-500"
-                />
+                >
+                  <option value="">Choose domain</option>
+                  <option value="western_dancer">Western Dancer</option>
+                  <option value="classical_dancer">Classical Dancer</option>
+                  <option value="both_dancer">Western and Classical</option>
+                  <option value="videographer">Videographer</option>
+                  <option value="photographer">Photographer</option>
+                  <option value="content_team">Content Team</option>
+                  <option value="graphics_designer">Graphics Designer</option>
+                </select>
+                <select
+                  required
+                  value={newMember.year}
+                  onChange={(e) => setNewMember({ ...newMember, year: e.target.value })}
+                  className="rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs outline-none focus:border-amber-500"
+                >
+                  <option value="">Choose year</option>
+                  {[1, 2, 3, 4].map((year) => <option key={year} value={year}>Year {year}</option>)}
+                </select>
                 <button
                   type="submit"
-                  className="rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-black hover:bg-amber-400"
+                  className="rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-black hover:bg-amber-400 sm:col-span-2 lg:col-span-1"
                 >
                   Create Member
                 </button>
               </div>
+              <p className="mt-3 text-xs text-zinc-400">
+                Account email: <span className="text-zinc-200">{newMember.rollNumber.trim() ? `${newMember.rollNumber.trim().toLowerCase()}@kiit.ac.in` : 'rollnumber@kiit.ac.in'}</span>
+                <span className="mt-1 block">Temporary password: binaryboppers. The member will set a new password at first sign in.</span>
+              </p>
             </form>
           </div>
         )}
@@ -517,7 +582,7 @@ export default function BoardDashboard() {
                   onChange={(e) => setGbmForm({ ...gbmForm, title: e.target.value })}
                   className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-amber-500"
                 />
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <input
                     required
                     type="date"
@@ -639,7 +704,7 @@ export default function BoardDashboard() {
                 onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
                 className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-amber-500"
               />
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <input
                   required
                   type="date"
@@ -671,7 +736,7 @@ export default function BoardDashboard() {
                 <label className="mb-1 block text-xs text-zinc-400">Event Banner (required)</label>
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp"
                   required
                   onChange={(e) => setBannerFile(e.target.files?.[0] || null)}
                   className="w-full text-xs text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-amber-500/20 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-amber-300"

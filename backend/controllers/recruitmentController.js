@@ -103,14 +103,23 @@ exports.addApplicant = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Recruitment is not currently live.' });
     }
 
-    if (!name?.trim() || !email?.trim()) {
+    if (typeof name !== 'string' || !name.trim() || typeof email !== 'string' || !email.trim()) {
       return res.status(400).json({ success: false, message: 'Name and email are required.' });
     }
-    if (!EMAIL_PATTERN.test(email.trim())) {
+    if (!EMAIL_PATTERN.test(email.trim()) || email.trim().length > 254) {
       return res.status(400).json({ success: false, message: 'A valid email address is required.' });
     }
-    if (rollNumber && !ROLL_PATTERN.test(String(rollNumber).trim())) {
+    if (rollNumber && (typeof rollNumber !== 'string' || !ROLL_PATTERN.test(rollNumber.trim()))) {
       return res.status(400).json({ success: false, message: 'A valid roll number is required.' });
+    }
+    if (year !== undefined && year !== '' && (!Number.isInteger(Number(year)) || Number(year) < 1 || Number(year) > 4)) {
+      return res.status(400).json({ success: false, message: 'Year must be between 1 and 4.' });
+    }
+    if ((phone !== undefined && typeof phone !== 'string') || (interestedIn !== undefined && typeof interestedIn !== 'string')) {
+      return res.status(400).json({ success: false, message: 'Phone and interest details must be text.' });
+    }
+    if (name.trim().length > 100 || (phone && phone.trim().length > 40) || (interestedIn && interestedIn.trim().length > 200)) {
+      return res.status(400).json({ success: false, message: 'One or more fields are too long.' });
     }
 
     const normalizedEmail = email.trim().toLowerCase();
@@ -134,8 +143,7 @@ exports.addApplicant = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Applicant added to temporary list.',
-      applicants: doc.applicants
+      message: 'Your application details were received.'
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
