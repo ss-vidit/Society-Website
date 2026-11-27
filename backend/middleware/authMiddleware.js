@@ -1,14 +1,11 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { readAuthCookie } = require('./authCookie');
 
 // ─── Protect: must be logged in ──────────────────────────────────
 const protect = async (req, res, next) => {
   try {
-    let token;
-
-    if (req.headers.authorization?.startsWith('Bearer')) {
-      token = req.headers.authorization.split(' ')[1];
-    }
+    const token = readAuthCookie(req);
 
     if (!token) {
       return res.status(401).json({ success: false, message: 'Not logged in. Please log in.' });
@@ -38,6 +35,17 @@ const boardOnly = (req, res, next) => {
   next();
 };
 
+// New accounts must finish profile and password setup before using member tools.
+const requireProfileSetup = (req, res, next) => {
+  if (req.user.mustChangePassword || !req.user.profileSetupComplete) {
+    return res.status(403).json({
+      success: false,
+      message: 'Complete your profile setup before using this feature.'
+    });
+  }
+  next();
+};
+
 // ─── Specific roles only ─────────────────────────────────────────
 // Usage: restrictTo('coordinator', 'student_lead')
 const restrictTo = (...roles) => {
@@ -52,4 +60,4 @@ const restrictTo = (...roles) => {
   };
 };
 
-module.exports = { protect, boardOnly, restrictTo };
+module.exports = { protect, requireProfileSetup, boardOnly, restrictTo };

@@ -8,17 +8,10 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   const fetchMe = async () => {
-    const token = localStorage.getItem('bb_token');
-    if (!token) {
-      setUser(null);
-      setLoading(false);
-      return;
-    }
     try {
       const { data } = await api.get('/auth/me');
       setUser(data.user);
     } catch {
-      localStorage.removeItem('bb_token');
       setUser(null);
     } finally {
       setLoading(false);
@@ -26,19 +19,25 @@ export function AuthProvider({ children }) {
   };
 
   useEffect(() => {
+    // Remove tokens left by older builds that stored them in localStorage.
+    localStorage.removeItem('bb_token');
     fetchMe();
   }, []);
 
   const login = async (email, password) => {
     const { data } = await api.post('/auth/login', { email, password });
-    localStorage.setItem('bb_token', data.token);
     setUser(data.user);
     return data.user;
   };
 
-  const logout = () => {
-    localStorage.removeItem('bb_token');
-    setUser(null);
+  const logout = async () => {
+    try {
+      await api.post('/auth/logout');
+    } catch {
+      // Clear the current UI session even if the server cannot be reached.
+    } finally {
+      setUser(null);
+    }
   };
 
   return (

@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
-import { ArrowDown, ArrowRight, ArrowUpRight, Calendar, Clock, Instagram, MapPin, MoveUpRight } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, Calendar, Clock, Instagram, MapPin, MoveUpRight, Pause, Play, Plus, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
 import BottomDock from '../components/BottomDock';
+import TaglineReveal from '../components/TaglineReveal';
+
+const TAGLINE_LINES = ['We rehearse together.', 'We make room for every kind of talent.'];
 
 const BOARD_ROLE_LABELS = {
   coordinator: 'Coordinator',
@@ -23,20 +26,17 @@ const WINGS = [
   {
     number: '01',
     title: 'Street & stage',
-    copy: 'Big energy, close formations, and the thrill of performing together.',
-    image: 'https://images.unsplash.com/photo-1535525153412-5a42439a210d?auto=format&fit=crop&w=1000&q=85'
+    copy: 'Big energy, close formations, and the thrill of performing together.'
   },
   {
     number: '02',
     title: 'Classical & contemporary',
-    copy: 'Rooted movement, new interpretations, and stories told through dance.',
-    image: 'https://images.unsplash.com/photo-1547153760-18fc86324498?auto=format&fit=crop&w=1000&q=85'
+    copy: 'Rooted movement, new interpretations, and stories told through dance.'
   },
   {
     number: '03',
     title: 'The creative crew',
-    copy: 'The camera, the edit, the artwork—everything that brings a show to life.',
-    image: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=1000&q=85'
+    copy: 'The camera, the edit, the artwork—everything that brings a show to life.'
   }
 ];
 
@@ -69,26 +69,6 @@ const FALLBACK_PAST = [
       '/events/fed-omega-4.png',
       '/events/fed-omega-5.png'
     ]
-  },
-  {
-    _id: 'p1',
-    title: 'KIIT Fest Opening Act',
-    banner: 'https://images.unsplash.com/photo-1518834107812-67b0b7c58434?auto=format&fit=crop&w=900&q=85'
-  },
-  {
-    _id: 'p2',
-    title: 'Nritya Sangam Finals',
-    banner: 'https://images.unsplash.com/photo-1504609813442-a8924e83f76e?auto=format&fit=crop&w=900&q=85'
-  },
-  {
-    _id: 'p3',
-    title: 'Freshers Flashmob',
-    banner: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=900&q=85'
-  },
-  {
-    _id: 'p4',
-    title: 'Inter-University Groove',
-    banner: 'https://images.unsplash.com/photo-1508700929628-666bc8bd84ea?auto=format&fit=crop&w=900&q=85'
   }
 ];
 
@@ -98,30 +78,50 @@ export default function PublicLanding() {
   const [gbms, setGbms] = useState([]);
   const [past, setPast] = useState([]);
   const [boardMembers, setBoardMembers] = useState([]);
+  const [galleryEntries, setGalleryEntries] = useState([]);
   const [recruitment, setRecruitment] = useState({ isLive: false, formLink: null });
   const [publicError, setPublicError] = useState('');
+  const [galleryPaused, setGalleryPaused] = useState(false);
+  const [galleryFormOpen, setGalleryFormOpen] = useState(false);
+  const [galleryEventName, setGalleryEventName] = useState('');
+  const [galleryFiles, setGalleryFiles] = useState([]);
+  const [galleryUploadStatus, setGalleryUploadStatus] = useState('');
+  const [galleryUploading, setGalleryUploading] = useState(false);
 
   useEffect(() => {
     if (loading) return;
     if (!user) setGbms([]);
     const loadPublicData = async () => {
-      try {
-        const requests = [
-          api.get('/events/public'),
-          api.get('/recruitment/status'),
-          api.get('/members/board-public')
-        ];
-        if (user) requests.push(api.get('/gbm/public'));
-        const [eventsRes, recRes, boardRes, gbmRes] = await Promise.all(requests);
-        setUpcoming(eventsRes.data.upcoming || []);
-        setGbms(user ? gbmRes.data.gbms || [] : []);
-        setPast(eventsRes.data.past || []);
-        setRecruitment(recRes.data || { isLive: false, formLink: null });
-        setBoardMembers(boardRes.data.boardMembers || []);
-      } catch (err) {
-        setGbms([]);
-        setPublicError(err.response?.data?.message || 'Live updates are temporarily unavailable. Saved highlights are shown instead.');
-      }
+      const requests = [
+        ['events', api.get('/events/public')],
+        ['gallery', api.get('/gallery/public')],
+        ['recruitment', api.get('/recruitment/status')],
+        ['board', api.get('/members/board-public')],
+        ...(user ? [['gbms', api.get('/gbm/public')]] : [])
+      ];
+      const results = await Promise.allSettled(requests.map(([, request]) => request));
+      const failures = [];
+
+      results.forEach((result, index) => {
+        const [section] = requests[index];
+        if (result.status === 'rejected') {
+          failures.push(section);
+          return;
+        }
+        const { data } = result.value;
+        if (section === 'events') {
+          setUpcoming(data.upcoming || []);
+          setPast(data.past || []);
+        }
+        if (section === 'gallery') setGalleryEntries(data.photos || []);
+        if (section === 'recruitment') setRecruitment(data || { isLive: false, formLink: null });
+        if (section === 'board') setBoardMembers(data.boardMembers || []);
+        if (section === 'gbms') setGbms(data.gbms || []);
+      });
+
+      setPublicError(failures.length
+        ? 'Some live updates could not load. Available highlights are still shown.'
+        : '');
     };
     loadPublicData();
   }, [loading, user?._id]);
@@ -139,14 +139,53 @@ export default function PublicLanding() {
       photo
     }))
   );
+  const allGalleryItems = [
+    ...galleryEntries.map((entry) => ({
+      id: `gallery-${entry._id}`,
+      title: entry.eventName,
+      photo: entry.photo
+    })),
+    ...galleryItems
+  ];
+
+  const handleGalleryUpload = async (event) => {
+    event.preventDefault();
+    setGalleryUploadStatus('');
+
+    if (!galleryFiles.length) {
+      setGalleryUploadStatus('Choose at least one photo to continue.');
+      return;
+    }
+
+    setGalleryUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('eventName', galleryEventName.trim());
+      galleryFiles.forEach((file) => formData.append('photos', file));
+
+      const { data } = await api.post('/gallery', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      setGalleryEntries((current) => [...(data.photos || []), ...current]);
+      setGalleryUploadStatus(data.message || 'Photos added to the gallery.');
+      setGalleryEventName('');
+      setGalleryFiles([]);
+      setGalleryFormOpen(false);
+    } catch (error) {
+      setGalleryUploadStatus(error.response?.data?.message || 'Could not add these photos. Please try again.');
+    } finally {
+      setGalleryUploading(false);
+    }
+  };
 
   return (
-    <div className="editorial-site min-h-screen bg-[#09090b] pb-28 pt-[72px] text-zinc-100">
-      <Navbar />
-      <BottomDock recruitment={recruitment} />
+    <div className={`editorial-site min-h-screen pt-24 text-zinc-100 ${user ? 'pb-28' : ''}`}>
+      <Navbar recruitment={recruitment} />
+      <BottomDock />
 
       {publicError && (
-        <div className="border-b border-amber-500/30 bg-amber-500/10 px-5 py-2 text-center text-xs text-amber-100">
+        <div className="public-live-error w-full max-w-full border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-center text-xs text-amber-100 sm:px-5">
           {publicError}
         </div>
       )}
@@ -154,123 +193,128 @@ export default function PublicLanding() {
       {!user && recruitment.isLive && recruitment.formLink && (
         <div className="flex flex-col items-center justify-between gap-3 bg-zinc-900 px-5 py-3 text-white sm:flex-row sm:px-8">
           <p className="text-sm">
-            <span className="mr-2 font-semibold text-amber-300">Auditions are open.</span>
+            <span className="mr-2 font-semibold text-amber-300">Recruitment is open.</span>
             Come find your place in the crew.
           </p>
           <a
             href={recruitment.formLink}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-white underline decoration-amber-400 underline-offset-4 hover:text-amber-300"
+            className="inline-flex items-center gap-2 text-sm font-medium text-white underline decoration-amber-400 underline-offset-4 hover:text-amber-300"
           >
-            Sign up <ArrowUpRight size={14} />
+            Apply to join <ArrowUpRight size={14} />
           </a>
         </div>
       )}
 
-      <main>
-        <section className="relative min-h-[620px] overflow-hidden bg-[#09090b] text-white sm:min-h-[690px]">
-          <img
-            src="/hero-team.png"
-            alt="Binary Boppers dance society together after a performance"
-            className="absolute inset-0 h-full w-full object-cover object-center opacity-75"
-          />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#10110f]/95 via-[#10110f]/65 to-[#10110f]/10" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#10110f]/50 via-transparent to-[#10110f]/20" />
-          <div className="relative mx-auto flex min-h-[620px] max-w-[1440px] flex-col justify-center px-6 pb-20 pt-24 sm:min-h-[690px] sm:px-12 lg:px-20">
-            <p className="mb-7 flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-white/75">
-              <span className="h-px w-9 bg-amber-400" />
-              KIIT · Dance and creative collective
+      <main id="main-content">
+        <section className="hero-layout text-white">
+          <div className="hero-copy">
+            <p className="mb-6 flex items-center gap-3 text-xs font-medium text-white/75">
+              <span className="cue-rule" />
+              KIIT dance and creative collective
             </p>
-            <h1 className="max-w-4xl font-display text-[clamp(3.75rem,10vw,8.75rem)] font-bold leading-[0.84] tracking-[-0.075em]">
-              <span className="text-white">CODE.</span>
-              <br />
-              <span className="text-amber-400">DANCE.</span>
-              <br />
-              <span className="text-white">CREATE.</span>
+            <h1 className="max-w-[680px] font-display text-5xl font-semibold leading-none sm:text-6xl lg:text-7xl">
+              <span className="hero-line">CODE.</span>
+              <span className="hero-line hero-line-accent">DANCE.</span>
+              <span className="hero-line">CREATE.</span>
             </h1>
-            <div className="mt-8 flex max-w-2xl flex-col gap-7 sm:flex-row sm:items-end sm:justify-between">
-              <p className="max-w-sm text-sm leading-6 text-white/75 sm:text-base">
+            <div className="mt-8 flex max-w-[680px] flex-col gap-6">
+              <p className="max-w-lg text-base leading-7 text-white/80">
                 A student-led dance and creative collective. Built on practice, powered by people, made for the stage.
               </p>
               <div className="flex flex-wrap gap-3">
                 <a
                   href="#events"
-                  className="inline-flex min-h-12 items-center gap-3 bg-amber-400 px-5 text-xs font-bold uppercase tracking-[0.1em] text-black transition-colors hover:bg-amber-300"
+                  className="inline-flex min-h-12 items-center gap-3 bg-amber-400 px-5 text-sm font-semibold text-black transition-colors hover:bg-amber-300"
                 >
-                  What’s on <ArrowRight size={16} />
+                  Explore upcoming events <ArrowRight size={16} />
                 </a>
                 <Link
                   to="/login"
-                  className="inline-flex min-h-12 items-center gap-3 border border-white/50 px-5 text-xs font-bold uppercase tracking-[0.1em] text-white transition-colors hover:border-amber-400 hover:bg-amber-400 hover:text-black"
+                  className="inline-flex min-h-12 items-center gap-3 border border-white/20 px-5 text-sm font-medium text-white transition-colors hover:border-white/40 hover:bg-white/5"
                 >
                   Member portal <MoveUpRight size={15} />
                 </Link>
               </div>
             </div>
           </div>
-          <a href="#about" className="absolute bottom-7 right-7 hidden items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/70 sm:flex">
-            Scroll to explore <ArrowDown size={14} />
-          </a>
-          <div className="absolute bottom-0 left-0 h-1 w-1/3 bg-amber-400" />
+          <figure className="hero-visual">
+            <img
+              src="/hero-team.png"
+              alt="Binary Boppers dance society together after a performance"
+              className="hero-image"
+            />
+            <figcaption className="hero-visual-caption">
+              <span className="cue-rule" />
+              <span>One crew, many ways to move</span>
+              <span className="hero-visual-location">KIIT · Bhubaneswar</span>
+            </figcaption>
+          </figure>
         </section>
 
-        <section id="about" className="mx-auto grid scroll-mt-24 max-w-[1440px] gap-8 px-6 py-20 text-zinc-100 sm:px-12 sm:py-28 lg:grid-cols-[0.7fr_1.3fr] lg:gap-16 lg:px-20">
+        <section id="about" className="section-wrap grid scroll-mt-24 gap-8 py-20 sm:py-24 lg:grid-cols-[0.8fr_1.2fr] lg:gap-16">
           <div>
-            <p className="mb-4 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-400">More than a dance society</p>
-            <h2 className="font-display max-w-md text-4xl font-bold leading-[0.98] tracking-[-0.055em] sm:text-6xl">
+            <p className="mb-4 text-xs font-medium text-amber-400">More than a dance society</p>
+              <h2 className="font-display max-w-md text-4xl font-semibold leading-tight sm:text-6xl">
               Different people. One rhythm.
             </h2>
           </div>
           <div className="flex flex-col justify-between gap-8 lg:pt-12">
-            <p className="max-w-2xl text-lg leading-8 text-zinc-400 sm:text-xl">
+            <p className="max-w-2xl text-base leading-7 text-zinc-400 sm:text-lg sm:leading-8">
               From the first rehearsal to the final cue, we make things together. Dance is the starting point; the community is what keeps us moving.
             </p>
-            <a href="#team" className="inline-flex w-fit items-center gap-3 border-b border-white/30 pb-2 text-xs font-bold uppercase tracking-[0.13em] hover:border-amber-400 hover:text-amber-300">
+            <a href="#team" className="inline-flex w-fit items-center gap-3 border-b border-white/30 pb-2 text-sm font-medium hover:border-amber-400 hover:text-amber-300">
               Meet the people behind it <ArrowRight size={15} />
             </a>
           </div>
         </section>
 
-        <section className="bg-[#11110f] px-6 py-16 text-zinc-100 sm:px-12 sm:py-20 lg:px-20">
+        <section aria-label="Our shared purpose" className="purpose-section border-y border-white/10 px-6 py-20 sm:px-12 sm:py-24 lg:px-20">
+          <div className="mx-auto max-w-[1280px]">
+            <p className="cue-heading mb-6 text-xs font-semibold text-amber-300">
+              <span className="cue-rule" />
+              Practice, people, performance
+            </p>
+            <TaglineReveal lines={TAGLINE_LINES} />
+          </div>
+        </section>
+
+        <section className="movement-section px-6 py-16 text-zinc-100 sm:px-12 sm:py-20 lg:px-20">
           <div className="mx-auto max-w-[1280px]">
             <div className="mb-9 flex items-end justify-between gap-4">
               <div>
-                <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-400">Find your people</p>
-                <h2 className="font-display text-4xl font-bold tracking-[-0.055em] sm:text-5xl">Ways to move</h2>
+                <p className="mb-3 text-xs font-medium text-amber-400">Find your people</p>
+                <h2 className="font-display text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">Ways to move</h2>
               </div>
-              <span className="hidden text-xs text-zinc-500 sm:block">Dance · Make · Belong</span>
+              <span className="hidden text-xs text-zinc-400 sm:block">Dance · Make · Belong</span>
             </div>
             <div className="grid gap-3 md:grid-cols-3">
               {WINGS.map((wing) => (
-                <article key={wing.number} className="group relative min-h-[390px] overflow-hidden bg-[#252622] text-white">
-                  <img src={wing.image} alt="" className="absolute inset-0 h-full w-full object-cover opacity-70 transition duration-700 group-hover:scale-[1.04] group-hover:opacity-85" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-black/20" />
-                  <div className="relative flex h-full min-h-[390px] flex-col justify-between p-6 sm:p-7">
-                    <span className="text-xs font-semibold tracking-[0.15em] text-white/75">{wing.number} / 03</span>
+                <article key={wing.number} className="board-card flex min-h-[240px] flex-col justify-between p-6 text-white sm:min-h-[260px] sm:p-7">
+                    <span className="text-sm font-medium text-amber-400">{wing.number}</span>
                     <div>
-                      <h3 className="font-display text-3xl font-semibold leading-tight tracking-[-0.04em]">{wing.title}</h3>
-                      <p className="mt-3 max-w-xs text-sm leading-6 text-white/75">{wing.copy}</p>
+                      <h3 className="font-display text-2xl font-semibold leading-tight tracking-[-0.03em] sm:text-3xl">{wing.title}</h3>
+                      <p className="mt-3 max-w-xs text-sm leading-6 text-zinc-400">{wing.copy}</p>
                     </div>
-                  </div>
                 </article>
               ))}
             </div>
           </div>
         </section>
 
-        <section id="events" className="mx-auto max-w-[1440px] scroll-mt-24 px-6 py-20 text-zinc-100 sm:px-12 sm:py-28 lg:px-20">
+        <section id="events" className="section-wrap scroll-mt-24 py-20 text-zinc-100 sm:py-24">
           <div className="mb-10 flex flex-col justify-between gap-5 border-b border-white/15 pb-6 sm:flex-row sm:items-end">
             <div>
-              <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-400">Mark your calendar</p>
-              <h2 className="font-display text-4xl font-bold tracking-[-0.055em] sm:text-5xl">Coming up</h2>
+              <p className="mb-3 text-xs font-medium text-amber-400">Mark your calendar</p>
+              <h2 className="font-display text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">Coming up</h2>
             </div>
             <p className="max-w-xs text-sm leading-6 text-zinc-400">Shows, sessions, and moments worth showing up for.</p>
           </div>
           {upcomingItems.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2">
               {upcomingItems.map((event) => (
-                <article key={`${event.itemType}-${event._id}`} className="grid overflow-hidden border border-white/10 bg-zinc-900 sm:grid-cols-[0.85fr_1.15fr]">
+                <article key={`${event.itemType}-${event._id}`} className="event-card grid overflow-hidden sm:grid-cols-[0.85fr_1.15fr]">
                   {event.banner ? (
                     <img src={event.banner} alt="" className="h-52 w-full object-cover sm:h-full" />
                   ) : (
@@ -279,12 +323,12 @@ export default function PublicLanding() {
                     </div>
                   )}
                   <div className="flex flex-col p-5 sm:p-7">
-                    <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.16em] text-amber-400">
-                      {event.itemType === 'gbm' ? 'Members-only · GBM' : 'Upcoming event'}
+                    <p className="mb-3 text-xs font-medium text-amber-400">
+                      {event.itemType === 'gbm' ? 'Members-only meeting' : 'Upcoming event'}
                     </p>
                     <h3 className="font-display text-2xl font-bold leading-tight tracking-[-0.04em]">{event.title}</h3>
                     {event.description && <p className="mt-3 text-sm leading-6 text-zinc-400">{event.description}</p>}
-                    <div className="mt-auto flex flex-wrap gap-x-4 gap-y-2 pt-6 text-xs text-[#57574f]">
+                    <div className="mt-auto flex flex-wrap gap-x-4 gap-y-2 pt-6 text-xs text-zinc-400">
                       <span className="inline-flex items-center gap-1.5 text-amber-200"><Calendar size={14} />{new Date(event.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                       <span className="inline-flex items-center gap-1.5"><Clock size={14} />{event.time || 'To be announced'}</span>
                       {event.venue && <span className="inline-flex items-center gap-1.5"><MapPin size={14} />{event.venue}</span>}
@@ -303,40 +347,148 @@ export default function PublicLanding() {
           )}
         </section>
 
-        <section id="gallery" className="scroll-mt-24 overflow-hidden bg-[#11110f] py-16 text-white sm:py-20">
-          <div className="mx-auto mb-8 flex max-w-[1440px] items-end justify-between gap-5 px-6 sm:px-12 lg:px-20">
+        <section id="gallery" className="gallery-surface scroll-mt-24 overflow-hidden py-16 text-white sm:py-20">
+          <div className="section-wrap mb-8 flex flex-col items-start justify-between gap-5 sm:flex-row sm:items-end">
             <div>
-              <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-400">A few things we’ve made</p>
-              <h2 className="font-display text-4xl font-bold tracking-[-0.055em] sm:text-5xl">From the floor</h2>
+              <p className="mb-3 text-xs font-medium text-amber-400">A few things we’ve made</p>
+              <h2 className="font-display text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">From the floor</h2>
             </div>
-            <span className="hidden text-xs text-white/50 sm:block">Past performances · Swipe to explore</span>
+              <div className="flex w-full flex-wrap items-center justify-start gap-2 sm:w-auto sm:justify-end sm:gap-4">
+              {user?.isBoardMember && (
+                <button
+                  type="button"
+                  className="gallery-add-button"
+                  aria-expanded={galleryFormOpen}
+                  aria-controls="gallery-upload-form"
+                  disabled={galleryUploading}
+                  onClick={() => {
+                    setGalleryFormOpen((open) => !open);
+                    setGalleryUploadStatus('');
+                  }}
+                >
+                  {galleryFormOpen ? <X size={15} /> : <Plus size={15} />}
+                  <span>{galleryFormOpen ? 'Close' : 'Add photos'}</span>
+                </button>
+              )}
+              <span className="hidden text-xs text-white/60 sm:block">Past performances · In motion</span>
+              <button
+                type="button"
+                className="gallery-motion-toggle"
+                aria-label={galleryPaused ? 'Resume gallery animation' : 'Pause gallery animation'}
+                aria-pressed={galleryPaused}
+                onClick={() => setGalleryPaused((paused) => !paused)}
+              >
+                {galleryPaused ? <Play size={15} /> : <Pause size={15} />}
+                <span>{galleryPaused ? 'Play' : 'Pause'}</span>
+              </button>
+            </div>
           </div>
-          <div className="overflow-hidden">
-            <div className="animate-marquee gap-4 px-6">
-              {[...galleryItems, ...galleryItems].map((item, index) => (
-                <figure key={`${item.id}-${index}`} className="group relative h-[300px] w-[270px] shrink-0 overflow-hidden bg-[#111] sm:h-[390px] sm:w-[340px]">
-                  <img src={item.photo} alt={`${item.title} performance`} className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.04]" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-                  <figcaption className="absolute bottom-5 left-5 right-5 font-display text-lg font-semibold tracking-[-0.02em]">{item.title}</figcaption>
-                </figure>
+          {galleryFormOpen && user?.isBoardMember && (
+            <form
+              id="gallery-upload-form"
+              onSubmit={handleGalleryUpload}
+              className="gallery-upload-panel section-wrap mb-6"
+            >
+              <div className="mb-4 flex items-start justify-between gap-4">
+                <div>
+                  <p className="app-kicker">Add to the archive</p>
+                  <h3 className="mt-1 text-lg font-semibold text-white">New performance photos</h3>
+                </div>
+                <span className="text-xs text-zinc-400">Up to 10 photos</span>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-[minmax(180px,0.8fr)_minmax(240px,1.2fr)_auto] sm:items-end">
+                <label className="block text-xs font-medium text-zinc-300">
+                  Event name
+                  <input
+                    required
+                    maxLength={120}
+                    value={galleryEventName}
+                    onChange={(event) => setGalleryEventName(event.target.value)}
+                    placeholder="e.g. FED OMEGA 2025"
+                    className="mt-2 block min-h-11 w-full rounded-md border border-zinc-700 bg-black/40 px-3 text-sm text-white outline-none transition-colors focus:border-amber-400"
+                  />
+                </label>
+                <label className="block text-xs font-medium text-zinc-300">
+                  Photos
+                  <input
+                    required
+                    multiple
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(event) => {
+                      const selectedFiles = Array.from(event.target.files || []);
+                      if (selectedFiles.length > 10) {
+                        setGalleryFiles([]);
+                        setGalleryUploadStatus('Choose up to 10 photos per upload.');
+                        event.target.value = '';
+                        return;
+                      }
+                      setGalleryFiles(selectedFiles);
+                      setGalleryUploadStatus('');
+                    }}
+                    className="gallery-file-input mt-2 block min-h-11 w-full rounded-md border border-zinc-700 bg-black/40 px-3 py-2 text-xs text-zinc-300"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={galleryUploading || galleryFiles.length === 0}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-amber-400 px-4 text-sm font-semibold text-black transition-colors hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Plus size={15} />
+                  {galleryUploading ? 'Adding…' : 'Add to gallery'}
+                </button>
+              </div>
+              {galleryFiles.length > 0 && (
+                <p className="mt-3 text-xs text-zinc-400" aria-live="polite">
+                  {galleryFiles.length} photo{galleryFiles.length === 1 ? '' : 's'} selected
+                </p>
+              )}
+              {galleryUploadStatus && (
+                <p className="mt-3 text-sm text-amber-200" role="status">{galleryUploadStatus}</p>
+              )}
+            </form>
+          )}
+          {!galleryFormOpen && galleryUploadStatus && (
+            <p className="section-wrap mb-4 text-sm text-amber-200" role="status">{galleryUploadStatus}</p>
+          )}
+          <div
+            className="gallery-track"
+            role="region"
+            aria-label="Past performances gallery"
+            tabIndex={0}
+            data-paused={galleryPaused}
+          >
+            <div
+              className="gallery-marquee"
+              style={{ '--gallery-duration': `${Math.max(allGalleryItems.length * 8, 40)}s` }}
+            >
+              {[0, 1].map((groupIndex) => (
+                <div key={groupIndex} className="gallery-marquee-group" aria-hidden={groupIndex === 1}>
+                  {allGalleryItems.map((item) => (
+                    <figure key={`${groupIndex}-${item.id}`} className="relative h-[300px] w-[270px] shrink-0 overflow-hidden rounded-lg bg-[#1c1c1c] sm:h-[390px] sm:w-[340px]">
+                      <img src={item.photo} alt={groupIndex === 0 ? `${item.title} performance` : ''} loading="lazy" className="h-full w-full object-cover" />
+                      <figcaption className="absolute inset-x-0 bottom-0 bg-black/65 px-5 py-4 font-display text-lg font-semibold">{item.title}</figcaption>
+                    </figure>
+                  ))}
+                </div>
               ))}
             </div>
           </div>
         </section>
 
-        <section id="team" className="mx-auto max-w-[1440px] scroll-mt-24 px-6 py-20 sm:px-12 sm:py-28 lg:px-20">
+        <section id="team" className="section-wrap scroll-mt-24 py-20 sm:py-24">
           <div className="mb-9 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
             <div>
-              <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-400">The people who make it happen</p>
-              <h2 className="font-display text-4xl font-bold tracking-[-0.055em] sm:text-5xl">Meet the crew</h2>
+              <p className="mb-3 text-xs font-medium text-amber-400">The people who make it happen</p>
+              <h2 className="font-display text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">Meet the crew</h2>
             </div>
             <p className="max-w-xs text-sm leading-6 text-zinc-400">A little choreography, a lot of teamwork.</p>
           </div>
           <div className="grid grid-cols-2 gap-x-3 gap-y-7 sm:grid-cols-3 sm:gap-x-5 lg:grid-cols-5">
             {boardItems.map((member) => (
               <article key={member._id} className="group">
-                <div className="aspect-[4/5] overflow-hidden bg-zinc-900">
-                  <img src={member.photo || '/logo.jpg'} alt={member.name} className="h-full w-full object-cover object-top transition duration-500 group-hover:scale-[1.03]" />
+                <div className="aspect-[4/5] overflow-hidden rounded-lg bg-zinc-900">
+                  <img src={member.photo || '/logo.jpg'} alt={member.name} loading="lazy" className="h-full w-full object-cover object-top transition-transform duration-500 group-hover:scale-[1.02]" />
                 </div>
                 <h3 className="mt-3 truncate text-sm font-semibold">{member.name}</h3>
                 <p className="mt-1 text-[11px] text-zinc-400">{BOARD_ROLE_LABELS[member.boardRole] || 'Board Member'}</p>
@@ -345,11 +497,11 @@ export default function PublicLanding() {
           </div>
         </section>
 
-        {!user && <section id="recruitment" className="scroll-mt-24 bg-amber-400 px-6 py-16 text-black sm:px-12 sm:py-20 lg:px-20">
+        {!user && <section id="recruitment" className="scroll-mt-24 bg-[#f2b83f] px-6 py-16 text-black sm:px-12 sm:py-20 lg:px-20">
           <div className="mx-auto flex max-w-[1280px] flex-col justify-between gap-8 sm:flex-row sm:items-end">
             <div>
-              <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.18em] text-black/60">Your turn</p>
-              <h2 className="font-display max-w-2xl text-4xl font-bold leading-[0.98] tracking-[-0.055em] sm:text-6xl">
+              <p className="mb-3 text-xs font-medium text-black/70">Your turn</p>
+              <h2 className="font-display max-w-2xl text-4xl font-semibold leading-[1.02] tracking-[-0.04em] sm:text-6xl">
                 There’s room for one more.
               </h2>
               <p className="mt-4 max-w-md text-sm leading-6 text-black/75">
@@ -360,11 +512,11 @@ export default function PublicLanding() {
             </div>
             <div className="flex flex-wrap gap-3">
               {recruitment.isLive && recruitment.formLink && (
-                <a href={recruitment.formLink} target="_blank" rel="noreferrer" className="inline-flex min-h-12 items-center gap-3 bg-black px-5 text-xs font-bold uppercase tracking-[0.1em] text-white hover:bg-zinc-800">
-                  Audition now <ArrowUpRight size={15} />
+                <a href={recruitment.formLink} target="_blank" rel="noreferrer" className="inline-flex min-h-12 items-center gap-3 bg-black px-5 text-sm font-semibold text-white hover:bg-zinc-800">
+                  Open recruitment form <ArrowUpRight size={15} />
                 </a>
               )}
-              <a href="https://instagram.com/binaryboppers" target="_blank" rel="noreferrer" className="inline-flex min-h-12 items-center gap-3 border border-black/50 px-5 text-xs font-bold uppercase tracking-[0.1em] hover:bg-black hover:text-white">
+              <a href="https://instagram.com/binaryboppers" target="_blank" rel="noreferrer" className="inline-flex min-h-12 items-center gap-3 border border-black/50 px-5 text-sm font-medium hover:bg-black hover:text-white">
                 <Instagram size={15} /> Follow along
               </a>
             </div>
@@ -372,7 +524,7 @@ export default function PublicLanding() {
         </section>}
       </main>
 
-      <footer className="flex flex-col justify-between gap-3 bg-black px-6 py-7 text-xs text-white/60 sm:flex-row sm:items-center sm:px-12 lg:px-20">
+      <footer className="flex flex-col justify-between gap-3 border-t border-white/10 px-6 py-7 text-xs text-white/60 sm:flex-row sm:items-center sm:px-12 lg:px-20">
         <span>© {new Date().getFullYear()} Binary Boppers · KIIT School of Computer Engineering</span>
         <a href="https://instagram.com/binaryboppers" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 hover:text-white">
           <Instagram size={14} /> @binaryboppers <ArrowUpRight size={13} />

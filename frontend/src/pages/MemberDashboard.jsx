@@ -75,29 +75,43 @@ export default function MemberDashboard() {
     ...upcomingEvents.map((event) => ({ ...event, itemType: 'event' })),
     ...upcomingGbms.map((gbm) => ({ ...gbm, itemType: 'gbm' }))
   ].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const firstName = user?.name?.trim().split(/\s+/)[0] || 'member';
 
   return (
-    <div className="app-shell workspace-ui min-h-screen pb-28 pt-[72px] text-white">
+    <div id="main-content" className="app-shell workspace-ui min-h-screen pb-28 pt-24 text-white">
       <Navbar />
       <BottomDock />
 
       <div className="app-container max-w-6xl py-8 sm:px-6">
-        <div className="mb-8 flex flex-col justify-between gap-4 border-b border-zinc-800 pb-6 sm:flex-row sm:items-center">
-          <div className="flex items-center gap-4">
+        <section className="portal-intro member-intro mb-6">
+          <div className="portal-intro-main">
             <img
               src={user?.photo || '/logo.jpg'}
               alt={user?.name}
-              className="h-16 w-16 rounded-full border-2 border-amber-500/60 object-cover"
+              className="portal-avatar h-16 w-16 rounded-full object-cover"
             />
-            <div>
-              <h1 className="app-page-title text-amber-400">{user?.name}</h1>
-              <p className="text-xs text-zinc-400">
-                Roll: {user?.rollNumber} • Year {user?.year}
+            <div className="min-w-0">
+              <p className="app-kicker">Member portal</p>
+              <h1 className="portal-title mt-2">Welcome back, {firstName}</h1>
+              <p className="mt-2 text-sm text-zinc-400">
+                Roll {user?.rollNumber} <span className="mx-1.5 text-zinc-600">·</span> Year {user?.year}
               </p>
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <dl className="portal-metrics portal-metrics-two">
+            <div className="portal-metric">
+              <dt>On your calendar</dt>
+              <dd className="portal-metric-value">{upcomingItems.length}</dd>
+            </div>
+            <div className="portal-metric">
+              <dt>Unread alerts</dt>
+              <dd className="portal-metric-value">{unreadCount}</dd>
+            </div>
+          </dl>
+        </section>
+
+        <nav aria-label="Member portal sections" className="portal-tabs mb-8">
             {[
               { id: 'events', label: 'Upcoming Events', icon: Sparkles },
               { id: 'gbms', label: `GBMs & Alerts (${unreadCount})`, icon: Bell }
@@ -106,6 +120,8 @@ export default function MemberDashboard() {
               return (
                 <button
                   key={tab.id}
+                  type="button"
+                  aria-pressed={activeTab === tab.id}
                   onClick={() => setSearchParams({ tab: tab.id })}
                   className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition ${
                     activeTab === tab.id
@@ -118,8 +134,7 @@ export default function MemberDashboard() {
                 </button>
               );
             })}
-          </div>
-        </div>
+        </nav>
 
         {statusMsg && (
           <div className="mb-6 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
@@ -167,9 +182,9 @@ export default function MemberDashboard() {
                   )}
                   <div className="p-5">
                     <div className="flex items-start justify-between gap-3">
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-300">Society event</p>
-                        <h3 className="text-lg font-bold text-white">{item.title}</h3>
+                        <h3 className="break-words text-lg font-bold text-white">{item.title}</h3>
                         <p className="mt-1 text-xs text-zinc-400">
                           {new Date(item.date).toLocaleDateString('en-IN')} • {item.time}
                           {item.venue ? ` • ${item.venue}` : ''}

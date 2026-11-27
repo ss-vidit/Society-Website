@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Bell, CalendarCheck, Home, LogOut, Sparkles, User, Users } from 'lucide-react';
+import { Bell, CalendarCheck, Home, LogOut, User, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/client';
 
-export default function BottomDock({ recruitment }) {
+export default function BottomDock() {
   const { user, logout } = useAuth();
   const { pathname, search } = useLocation();
   const navigate = useNavigate();
@@ -56,15 +56,7 @@ export default function BottomDock({ recruitment }) {
       active: pathname === '/profile' || pathname === '/setup-profile' || pathname === '/login'
     }
   ];
-  const publicRecruitmentItem = {
-    id: 'recruitment',
-    title: recruitment?.isLive && recruitment?.formLink ? 'Recruitment (Live)' : 'Recruitment ended',
-    to: recruitment?.isLive && recruitment?.formLink ? recruitment.formLink : '/home#recruitment',
-    external: Boolean(recruitment?.isLive && recruitment?.formLink),
-    icon: Sparkles,
-    active: false
-  };
-  const items = user ? signedInItems : recruitment ? [publicRecruitmentItem] : [];
+  const items = signedInItems;
 
   const toggleNotifications = async () => {
     const opening = !notificationsOpen;
@@ -92,12 +84,12 @@ export default function BottomDock({ recruitment }) {
     }
   };
 
-  if (!user && !recruitment) return null;
+  if (!user) return null;
 
   return (
-    <div className="fixed bottom-5 left-1/2 z-50 -translate-x-1/2">
+    <div className="bb-dock fixed bottom-5 left-1/2 z-50 -translate-x-1/2">
       {notificationsOpen && user && (
-        <section className="absolute bottom-16 left-1/2 w-[min(22rem,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-2xl border border-white/15 bg-zinc-950/95 shadow-2xl backdrop-blur-xl">
+        <section className="bb-notifications absolute bottom-16 left-1/2 w-[min(22rem,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden border border-white/10 bg-[#121214]">
           <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
             <h2 className="text-sm font-bold text-amber-300">Notifications</h2>
             <span className="text-[11px] text-zinc-500">{unreadCount} unread</span>
@@ -131,13 +123,13 @@ export default function BottomDock({ recruitment }) {
       )}
       <nav
         aria-label="Bottom navigation"
-        className="flex max-w-[calc(100vw-2rem)] items-center gap-1 overflow-x-auto border border-white/15 bg-zinc-950/95 p-1.5 shadow-xl backdrop-blur"
+        className="bb-dock-nav flex max-w-[calc(100vw-2rem)] items-center gap-1 overflow-x-auto border border-white/10 bg-[#0f0f10] p-1.5"
       >
         {items.map((item) => {
           const Icon = item.icon;
           const classes = `flex h-10 w-10 shrink-0 items-center justify-center gap-2 border px-2.5 text-[10px] font-semibold transition-colors duration-200 sm:w-auto sm:px-3 ${
             item.active
-              ? 'border-amber-400 bg-amber-400 text-black'
+              ? 'border-white/10 bg-zinc-800 text-amber-300'
               : 'border-transparent text-white/75 hover:border-amber-400 hover:bg-amber-400 hover:text-black'
           }`;
 
@@ -188,7 +180,7 @@ export default function BottomDock({ recruitment }) {
             aria-expanded={notificationsOpen}
             className={`relative flex h-10 w-10 shrink-0 items-center justify-center gap-2 border px-2.5 text-[10px] font-semibold transition-colors sm:w-auto sm:px-3 ${
               notificationsOpen
-                ? 'border-amber-400 bg-amber-400 text-black'
+                ? 'border-white/10 bg-zinc-800 text-amber-300'
                 : 'border-transparent text-white/75 hover:border-amber-400 hover:bg-amber-400 hover:text-black'
             }`}
           >
