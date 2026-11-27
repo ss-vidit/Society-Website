@@ -12,6 +12,12 @@ The repository includes a Render Blueprint in `render.yaml`. It builds the React
 
 Render generates `JWT_SECRET` for the service. Existing accounts remain in MongoDB; active browser sessions may need to sign in again after the first deployment.
 
+For a manually configured Web Service, use this build command so frontend build dependencies such as Vite are installed even when `NODE_ENV=production`:
+
+```sh
+npm ci --prefix backend && npm ci --include=dev --prefix frontend && npm run build --prefix frontend
+```
+
 ## Image uploads
 
 Cloudinary is optional. Without Cloudinary credentials, uploads are limited to 1 MB per image and stored as data URLs in MongoDB. To use Cloudinary, set `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` in Render's service environment.
